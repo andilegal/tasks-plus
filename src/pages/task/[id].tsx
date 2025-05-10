@@ -1,6 +1,15 @@
 import { useToast } from '@/provider/toast-provider';
 import { db } from '@/services/firebase.connects';
-import { addDoc, collection, deleteDoc, doc } from 'firebase/firestore';
+import {
+  addDoc,
+  collection,
+  deleteDoc,
+  doc,
+  getDoc,
+  getDocs,
+  query,
+  where,
+} from 'firebase/firestore';
 import { useSession } from 'next-auth/react';
 import Head from 'next/head';
 import { useEffect, useState } from 'react';
@@ -195,3 +204,54 @@ export default function Tasks({
     </div>
   );
 }
+
+export const getServerSideProps = async ({
+  params,
+}: {
+  params: { id: string };
+}) => {
+  const { id } = params;
+
+  const q = query(collection(db, 'comments'), where('id', '==', id));
+
+  const snapComments = await getDocs(q);
+  let allComments: AllCommentsProps[] = [];
+  snapComments.forEach((doc) => {
+    allComments.push({
+      id: doc.id,
+      comment: doc.data().comment,
+      user: doc.data().user,
+      createdAt: new Date(
+        doc.data().createdAt.seconds * 1000
+      ).toLocaleDateString(),
+      name: doc.data().name,
+    });
+  });
+
+  const docRef = doc(db, 'tasks', id);
+  const docSnap = await getDoc(docRef);
+  const taskData = docSnap.data();
+
+  if (!taskData === undefined || !taskData?.isPublic) {
+    return {
+      redirect: {
+        destination: '/',
+        permanent: false,
+      },
+    };
+  }
+
+  const milisseconds = docSnap.data()?.createdAt?.seconds * 1000;
+  const taskItem = {
+    comment: docSnap.data()?.comment,
+    createdAt: new Date(milisseconds).toLocaleDateString(),
+    user: docSnap?.data()?.user,
+    name: docSnap?.data()?.name,
+    isPublic: docSnap?.data()?.isPublic,
+    id,
+  };
+
+  return {
+    props: { taskItem, allComments },
+  };
+};
